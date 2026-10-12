@@ -1,3 +1,6 @@
+# Order fallback log - contains customer PII, never commit
+/data
+
 # Logs
 logs
 *.log
