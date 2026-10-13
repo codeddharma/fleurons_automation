@@ -30,6 +30,6 @@ export const outlets: Outlet[] = [
     petpoojaRestId: "qicp50k27a",
     isActive: true,
     isDefault: true,
-    itemMap: [],
+    itemMap: [{ shopifyVariantId: "44289163886775", petpoojaItemId: "29331" }],
   },
 ];
