@@ -8,19 +8,31 @@ import { findOrderByPetpoojaOrderId, recordOrderEvent, OrderEventType } from "..
 export const petpoojaCallbackRouter = Router();
 
 /**
- * Maps Petpooja's status vocabulary to our internal event type. Confirm the
- * exact status strings/codes Petpooja sends against their callback docs and
- * adjust this map accordingly.
+ * Maps Petpooja's real status codes (confirmed empirically against the
+ * sandbox, 2026-10-16 - not documented anywhere) to our internal event type.
+ * "1" = Accepted is confirmed from a real callback payload. Food
+ * Ready/Rejected codes are still unconfirmed - add them here once seen.
  */
 const PETPOOJA_STATUS_MAP: Record<string, OrderEventType> = {
-  accepted: "pos_accepted",
-  rejected: "pos_rejected",
+  "1": "pos_accepted",
 };
 
+/**
+ * Petpooja's real callback shape (confirmed empirically, 2026-10-16) - NOT
+ * what was originally assumed. Example:
+ * {"restID":"qicp50k27a","orderID":"SHOPIFY-TEST-...","status":"1",
+ *  "rider_phone_number":"","cancel_reason":"","is_modified":"No",
+ *  "minimum_delivery_time":30,"minimum_prep_time":30}
+ */
 const callbackBodySchema = z.object({
-  petpoojaOrderId: z.string().min(1),
+  restID: z.string().optional(),
+  orderID: z.string().min(1),
   status: z.string().min(1),
-  reason: z.string().optional(),
+  cancel_reason: z.string().optional(),
+  rider_phone_number: z.string().optional(),
+  is_modified: z.string().optional(),
+  minimum_delivery_time: z.number().optional(),
+  minimum_prep_time: z.number().optional(),
 });
 
 petpoojaCallbackRouter.post("/status", (req, res) => {
@@ -38,8 +50,8 @@ petpoojaCallbackRouter.post("/status", (req, res) => {
     return res.status(400).send("Invalid payload");
   }
 
-  const { petpoojaOrderId, status, reason } = parsed.data;
-  const mappedEvent = PETPOOJA_STATUS_MAP[status.toLowerCase()];
+  const { orderID: petpoojaOrderId, status, cancel_reason: reason } = parsed.data;
+  const mappedEvent = PETPOOJA_STATUS_MAP[status];
 
   if (!mappedEvent) {
     logger.warn({ status }, "Received unrecognized Petpooja status");
@@ -57,7 +69,7 @@ petpoojaCallbackRouter.post("/status", (req, res) => {
     shopifyOrderId: order.shopifyOrderId,
     shopifyOrderNumber: order.shopifyOrderNumber,
     petpoojaOrderId,
-    failureReason: mappedEvent === "pos_rejected" ? reason ?? "Rejected by POS" : undefined,
+    failureReason: mappedEvent === "pos_rejected" ? reason || "Rejected by POS" : undefined,
   });
 
   if (mappedEvent === "pos_rejected") {
